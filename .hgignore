@@ -1,6 +1,4 @@
 syntax: glob
-*.sbt/.bsp/*
-*.sbt/.idea/*
-*.sbt/**/target/*
-# Default ignored files
-.idea/workspace.xml
+.bsp/*
+.idea/*
+**/target/*
