@@ -9,7 +9,9 @@ sealed trait Re[T]:
 
 object Re {
 	def unapply[Q](i: Re[Q]): Option[Q] =
-		???
+		i match
+			case r: R[_] => Some(r.get)
+			case l: L[_] => None
 
 	def ![Q](t: Throwable): Re[Q] = L(t)
 
@@ -19,7 +21,6 @@ object Re {
 		override def map[O](f: Q => O): Re[O] = R(f(get))
 
 		override def flatMap[O](f: Q => Re[O]): Re[O] = f(get)
-
 
 	private class L[Q](e: Throwable) extends Re[Q]:
 		override def map[O](f: Q => O): Re[O] = L(e)

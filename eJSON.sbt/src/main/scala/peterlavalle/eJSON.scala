@@ -5,6 +5,11 @@ import org.json.{JSONArray, JSONObject}
 import java.io.File
 
 object eJSON {
+	given Field[String] =
+		field {
+			(o, k) =>
+				o.get(k).toString
+		}
 
 	extension [W](seq: Iterable[W])
 		def toJSONArray(set: (JSONArray, W) => Unit): JSONArray =
@@ -18,19 +23,11 @@ object eJSON {
 			(0 until a.length())
 				.to(LazyList)
 				.map(a.getString)
-		
+
 		def asObjects: Seq[JSONObject] =
 			(0 until a.length())
 				.to(LazyList)
 				.map(a.getJSONObject)
-
-	private case class KeyMissing(message: String) extends Exception(message)
-
-	given Field[String] =
-		field {
-			(o, k) =>
-				o.get(k).toString
-		}
 
 	given Field[Int] =
 		field {
@@ -42,8 +39,6 @@ object eJSON {
 						s.toInt
 		}
 
-	given Field[File] = field((o: JSONObject, k: String) => File(o.getString(k)).getAbsoluteFile)
-
 	def field[Q](get: (JSONObject, String) => Q): Field[Q] =
 		(json: JSONObject, key: String) =>
 			try
@@ -52,9 +47,31 @@ object eJSON {
 				case e: Throwable =>
 					Re ! (e)
 
+	given Field[File] = field((o: JSONObject, k: String) => File(o.getString(k)).getAbsoluteFile)
+
 	def field[I: Field]: field0[I] = field0[I]()
 
-	trait oEntity[Q] extends Field[Q] {
+	extension (s: String)
+		def /[Q](f: oEntity[Q]): TUn[Q] =
+			(json: JSONObject) =>
+				val keys = json.keySet()
+				if (1 != keys.size())
+					None
+				else {
+					val key = keys.iterator().next()
+					if (key != s)
+						None
+					else
+						json.optJSONObject(key) match
+							case null =>
+								None
+							case json =>
+								f.unapply(json)
+				}
+
+	trait oEntity[Q] extends Field[Q] with TUn[Q] {
+		override def unapply(o: JSONObject): Option[Q] = Re.unapply(decode(o))
+
 		def decode(o: JSONObject): Re[Q]
 
 		override def onObject(json: JSONObject, key: String): Re[Q] =
@@ -104,6 +121,8 @@ object eJSON {
 							.onObject(o, k)
 							.map(get)
 
+	private case class KeyMissing(message: String) extends Exception(message)
+
 	private object field1:
 
 		import scala.quoted.*
@@ -112,18 +131,14 @@ object eJSON {
 		(
 			q: Expr[String => oEntity[O]],
 			f: Expr[I => Any]
-		)(using Quotes): Expr[oEntity[O]] =
-			// you need the line `import quotes.reflect.*` here but IDEA likes to remove it
-			//import quotes.reflect.*
-			// @formatter:off
-			//import quotes.reflect.*
+		)(using quotes: Quotes): Expr[oEntity[O]] =
 			import quotes.reflect.*
-			// @formatter:on
 
 			// Inspect the lambda to extract parameter name
 			f.asTerm match {
 
 				case Inlined(_, List(), Block(List(DefDef(_, List(List(ValDef(name: String, _, _))), _, _)), _)) =>
+					// pass the name into the whatnot
 					val key: Expr[String] = Expr(name)
 					'{ $q($key) }
 
