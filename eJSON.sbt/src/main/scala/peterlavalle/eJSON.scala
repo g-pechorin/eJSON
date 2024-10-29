@@ -6,6 +6,26 @@ import java.io.File
 
 object eJSON {
 
+	extension [W](seq: Iterable[W])
+		def toJSONArray(set: (JSONArray, W) => Unit): JSONArray =
+			val json = JSONArray()
+			seq.foreach((item: W) => set(json, item))
+			json
+
+	extension (a: JSONArray)
+
+		def asStrings: Seq[String] =
+			(0 until a.length())
+				.to(LazyList)
+				.map(a.getString)
+		
+		def asObjects: Seq[JSONObject] =
+			(0 until a.length())
+				.to(LazyList)
+				.map(a.getJSONObject)
+
+	private case class KeyMissing(message: String) extends Exception(message)
+
 	given Field[String] =
 		field {
 			(o, k) =>
@@ -64,7 +84,7 @@ object eJSON {
 			(k: String) =>
 				(o: JSONObject) =>
 					if (!o.has(k))
-						Re ! IndexOutOfBoundsException(s"key $k is not in $o")
+						Re ! KeyMissing(s"key $k is not in $o")
 					else
 						summon[Field[I]]
 							.onObject(o, k)
