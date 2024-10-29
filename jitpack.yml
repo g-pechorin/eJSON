@@ -1,2 +1,3 @@
-build:
- path: eJSON.sbt/
+jdk:
+ - openjdk21
+path: eJSON.sbt/
