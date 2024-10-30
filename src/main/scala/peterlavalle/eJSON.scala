@@ -3,6 +3,7 @@ package peterlavalle
 import org.json.{JSONArray, JSONObject}
 
 import java.io.File
+import scala.math.BigDecimal.javaBigDecimal2bigDecimal
 
 object eJSON {
 	given Field[String] =
@@ -10,24 +11,6 @@ object eJSON {
 			(o, k) =>
 				o.get(k).toString
 		}
-
-	extension [W](seq: Iterable[W])
-		def toJSONArray(set: (JSONArray, W) => Unit): JSONArray =
-			val json = JSONArray()
-			seq.foreach((item: W) => set(json, item))
-			json
-
-	extension (a: JSONArray)
-
-		def asStrings: Seq[String] =
-			(0 until a.length())
-				.to(LazyList)
-				.map(a.getString)
-
-		def asObjects: Seq[JSONObject] =
-			(0 until a.length())
-				.to(LazyList)
-				.map(a.getJSONObject)
 
 	given Field[Int] =
 		field {
@@ -39,6 +22,46 @@ object eJSON {
 						s.toInt
 		}
 
+	given Field[Float] =
+		field {
+			(o, k) =>
+				o.get(k) match
+					case i: Int =>
+						i.toFloat
+					case s: String =>
+						s.toFloat
+					case f: Float =>
+						f
+					case d: Double => d.toFloat
+					case b: java.math.BigDecimal =>
+						b.toFloat
+		}
+
+	extension [W](seq: Iterable[W])
+		def toJSONArray(set: (JSONArray, W) => Unit): JSONArray =
+			val json = JSONArray()
+			seq.foreach((item: W) => set(json, item))
+			json
+
+	extension (a: JSONArray)
+		def asOf[E: Field]: Re[List[E]] =
+			(0 until a.length())
+				.foldLeft(Re(List[E]())) {
+					case (left, index) =>
+						left.flatMap {
+							left =>
+								summon[Field[E]].onArray(a, index).map(left :+ _)
+						}
+				}
+		def asStrings: Seq[String] = a.asOf[String].get
+
+		def asObjects: Seq[JSONObject] =
+			(0 until a.length())
+				.to(LazyList)
+				.map(a.getJSONObject)
+
+	given Field[File] = field((o: JSONObject, k: String) => File(o.getString(k)).getAbsoluteFile)
+
 	def field[Q](get: (JSONObject, String) => Q): Field[Q] =
 		(json: JSONObject, key: String) =>
 			try
@@ -47,9 +70,16 @@ object eJSON {
 				case e: Throwable =>
 					Re ! (e)
 
-	given Field[File] = field((o: JSONObject, k: String) => File(o.getString(k)).getAbsoluteFile)
-
 	def field[I: Field]: field0[I] = field0[I]()
+
+	trait oEntity[Q] extends Field[Q] with TUn[Q] {
+		override def unapply(o: JSONObject): Option[Q] = Re.unapply(decode(o))
+
+		def decode(o: JSONObject): Re[Q]
+
+		override def onObject(json: JSONObject, key: String): Re[Q] =
+			decode(json.getJSONObject(key))
+	}
 
 	extension (s: String)
 		def /[Q](f: oEntity[Q]): TUn[Q] =
@@ -68,15 +98,6 @@ object eJSON {
 							case json =>
 								f.unapply(json)
 				}
-
-	trait oEntity[Q] extends Field[Q] with TUn[Q] {
-		override def unapply(o: JSONObject): Option[Q] = Re.unapply(decode(o))
-
-		def decode(o: JSONObject): Re[Q]
-
-		override def onObject(json: JSONObject, key: String): Re[Q] =
-			decode(json.getJSONObject(key))
-	}
 
 	trait Field[Q] {
 		def onArray(json: JSONArray, i: Int): Re[Q] =
@@ -146,5 +167,10 @@ object eJSON {
 					quotes.reflect.report.error(s"pure expected a for{}yield comprehension")
 					'{ ??? }
 			}
+
+	given [T: Field]: Field[List[T]] with {
+		override def onObject(json: JSONObject, key: String): Re[List[T]] =
+			json.getJSONArray(key).asOf[T]
+	}
 
 }

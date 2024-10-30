@@ -1,6 +1,7 @@
 package peterlavalle
 
-import org.json.JSONObject
+import org.json.{JSONArray, JSONObject}
+import peterlavalle.eJSON.*
 
 class eJSONTest extends munit.FunSuite {
 
@@ -142,6 +143,15 @@ class eJSONTest extends munit.FunSuite {
 		assertEquals(
 			go("{foo:{g:'-179'}}"),
 			Box(-179, 1)
+		)
+	}
+	test("tes asOf on floats") {
+		val src = "[1, '3.4', -5.0]"
+		val actual: List[Float] = JSONArray(src).asOf[Float].get
+
+		assertEquals(
+			actual,
+			List(1.0f, 3.4f, -5.0f)
 		)
 	}
 }
