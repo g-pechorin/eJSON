@@ -10,9 +10,14 @@ jobs:
       dockerfile: ./py_jdk/Dockerfile
     runs-on: pi3agent
     steps:
+      - name: install pacakges
+        run: |
+          apt update
+          apt install -y python3
+          apt install -y openjdk-11-jdk
+          apt clean
       - name: Checkout code
         uses: actions/checkout@v2
-
       - name: run those python tests
         run: |
           python lsbt test
