@@ -6,8 +6,7 @@ on:
 jobs:
   build:
     container:
-      # Path to your Dockerfile in the repository
-      dockerfile: ./py_jdk/Dockerfile
+      image: node:16
     runs-on: pi3agent
     steps:
       - name: install pacakges
