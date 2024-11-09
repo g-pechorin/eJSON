@@ -1,0 +1,19 @@
+name: Publish to gpechorin GitHub Pages
+on:
+  push:
+    branches:
+      - "*"
+jobs:
+  build:
+    container:
+      # Path to your Dockerfile in the repository
+      dockerfile: ./py_jdk/Dockerfile
+    runs-on: pi3agent
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: run those python tests
+        run: |
+          python lsbt test
+      
