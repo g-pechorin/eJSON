@@ -3,7 +3,8 @@ FROM openjdk:21-jdk
 
 # Install Python
 RUN microdnf update && \
-    microdnf install python3 && \
+    microdnf install -y python3 && \
+    microdnf install -y nodejs && \
     microdnf clean all
 
 # Make python3 default
