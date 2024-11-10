@@ -21,12 +21,9 @@ def main():
 def download_file(url, destination):
     try:
         urllib.request.urlretrieve(url, destination)
-        print(f"File downloaded successfully and saved as {destination}")
+        print("File downloaded successfully and saved as " + str(destination))
     except Exception as e:
-        print(f"Failed to download file: {e}")
-
-#!/usr/bin/env python3
-
+        print("Failed to download file: " + str(e))
 
 if __name__ == '__main__':
     main()
