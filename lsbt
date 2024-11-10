@@ -2,7 +2,6 @@
 
 import subprocess
 import sys
-import urllib.request
 import os
 
 url = 'https://codeberg.org/paintgoblin/shugits/raw/commit/cadecff37713c5883d4a203f5063d54ffb3198c2/sbt-launch.jar'
