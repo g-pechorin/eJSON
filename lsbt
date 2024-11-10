@@ -18,24 +18,16 @@ def main():
     )
 
 def download_file(url, destination):
-    if not os.path.isfile(destination):
-        # if not os.path.isdir(into):
-        #     os.makedirs(into)
-        import sys
-        if sys.version_info[0] < 3:
-            import urllib2  # Python 2.7
-            urlopen = urllib2.urlopen
-        else:
-            import urllib.request as urllib_request  # Python 3.x
-            urlopen = urllib_request.urlopen
-        response = urlopen(url)
-        with open(destination, 'wb') as f:
-            f.write(response.read())
-    try:
-        urllib.request.urlretrieve(url, destination)
-        print("File downloaded successfully and saved as " + str(destination))
-    except Exception as e:
-        print("Failed to download file: " + str(e))
+    import sys
+    if sys.version_info[0] < 3:
+        import urllib2  # Python 2.7
+        urlopen = urllib2.urlopen
+    else:
+        import urllib.request as urllib_request  # Python 3.x
+        urlopen = urllib_request.urlopen
+    response = urlopen(url)
+    with open(destination, 'wb') as f:
+        f.write(response.read())
 
 if __name__ == '__main__':
     main()
