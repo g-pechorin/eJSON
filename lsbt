@@ -8,7 +8,9 @@ url = 'https://codeberg.org/paintgoblin/shugits/raw/commit/cadecff37713c5883d4a2
 destination = 'target/sbt-launch.jar'
 
 def main():
-    os.makedirs(os.path.dirname(destination), exist_ok=True)
+    into = os.path.dirname(destination)
+    if not os.path.isdir(into):
+        os.makedirs(into)
 
     if not os.path.isfile(destination):
         download_file(url, destination)
