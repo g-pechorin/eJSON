@@ -33,20 +33,20 @@ jobs:
       - name: test
         run: |
           sbt test
-      - name: Check for changes on GitHub remote
-        id: check_changes
-        run: |
-          # Fetch the latest changes from the GitHub remote
-          git fetch github
+      # - name: Check for changes on GitHub remote
+      #   id: check_changes
+      #   run: |
+      #     # Fetch the latest changes from the GitHub remote
+      #     git fetch github
 
-          # Check for differences between local branch and GitHub remote
-          if git diff --quiet HEAD github/main; then
-            echo "No changes on GitHub."
-            echo "::set-output name=changes::false"
-          else
-            echo "Changes detected on GitHub that are not in the local branch."
-            echo "::set-output name=changes::true"
-          fi
+      #     # Check for differences between local branch and GitHub remote
+      #     if git diff --quiet HEAD github/main; then
+      #       echo "No changes on GitHub."
+      #       echo "::set-output name=changes::false"
+      #     else
+      #       echo "Changes detected on GitHub that are not in the local branch."
+      #       echo "::set-output name=changes::true"
+      #     fi
       - name: Force Push to GitHub
         if: ${{ github.ref_name == 'default' }}  # Ensures it only runs on ci2 branch
         run: |
