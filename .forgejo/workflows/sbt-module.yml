@@ -26,6 +26,7 @@ jobs:
         run: |
           git remote add push_public "${PUSH_PUBLIC}"
           git remote -v
+          git fetch --unshallow
       - name: build
         run: |
           sbt compile
