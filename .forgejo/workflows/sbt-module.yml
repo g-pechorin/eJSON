@@ -34,7 +34,7 @@ jobs:
         run: |
           sbt test
       - name: Force Push to GitHub
-        if: ${{ github.ref_name == 'default' }}  # Ensures it only runs on ci2 branch
+        if: ${{ github.ref_name == 'default' }}  # Ensures it only runs on `default` branch
         run: |
           git push github default --force
           # git push github HEAD:default --force
