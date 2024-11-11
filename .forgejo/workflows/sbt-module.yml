@@ -1,0 +1,53 @@
+name: build this sbt module
+on:
+  push:
+    branches:
+      - "*"
+jobs:
+  build:
+    container:
+      image: node:16
+    runs-on: sam1
+    steps:
+      - name: setup sbt et al
+        run: |
+          echo "deb https://repo.scala-sbt.org/scalasbt/debian all main" | tee /etc/apt/sources.list.d/sbt.list
+          echo "deb https://repo.scala-sbt.org/scalasbt/debian /" | tee /etc/apt/sources.list.d/sbt_old.list
+          curl -sL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x2EE0EA64E40A89B84B2DF73499E82A75642AC823" | apt-key add
+          apt-get update
+          apt-get install sbt
+          apt install -y openjdk-11-jdk sbt
+          apt clean
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: Set up GitHub remote with PAT
+        env:
+          GITHUB_PAT: ${{ secrets.PUBACC }}
+          GITHUB_PUB: ${{ secrets.GH_PUB }}
+        run: |
+          git remote add github "https://${GITHUB_PAT}@github.com/${GITHUB_PUB}.git"
+          git remote -v  # Verify remote setup
+      - name: build
+        run: |
+          sbt compile
+      - name: test
+        run: |
+          sbt test
+      - name: Check for changes on GitHub remote
+        id: check_changes
+        run: |
+          # Fetch the latest changes from the GitHub remote
+          git fetch github
+
+          # Check for differences between local branch and GitHub remote
+          if git diff --quiet HEAD github/main; then
+            echo "No changes on GitHub."
+            echo "::set-output name=changes::false"
+          else
+            echo "Changes detected on GitHub that are not in the local branch."
+            echo "::set-output name=changes::true"
+          fi
+      - name: Force Push to GitHub
+        if: ${{ github.ref_name == 'default' }}  # Ensures it only runs on ci2 branch
+        run: |
+          git push github HEAD:default --force
