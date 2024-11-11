@@ -22,19 +22,22 @@ jobs:
         uses: actions/checkout@v2
       - name: Set up GitHub remote with PAT
         env:
-          GITHUB_PAT: ${{ secrets.PUBACC }}
-          GITHUB_PUB: ${{ secrets.GH_PUB }}
+          PUSH_PUBLIC: ${{ secrets.PUSH_PUBLIC }}
         run: |
-          git remote add github "https://${GITHUB_PAT}@github.com/${GITHUB_PUB}.git"
-          git remote -v  # Verify remote setup
+          git remote add push_public "${PUSH_PUBLIC}"
+          git remote -v
       - name: build
         run: |
           sbt compile
       - name: test
         run: |
           sbt test
-      - name: Force Push to GitHub
-        if: ${{ github.ref_name == 'default' }}  # Ensures it only runs on `default` branch
+      - name: push dry
         run: |
-          git push github default --force
-          # git push github HEAD:default --force
+          CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+          git push --force --dry-run push_public HEAD:$CURRENT_BRANCH
+      - name: push hot
+        if: ${{ github.ref_name == 'default' }}
+        run: |
+          CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+          git push --force push_public HEAD:$CURRENT_BRANCH
