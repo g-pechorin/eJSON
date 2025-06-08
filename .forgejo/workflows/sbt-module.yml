@@ -7,7 +7,7 @@ jobs:
   build:
     container:
       image: node:16
-    runs-on: sam1
+    runs-on: pi3agent
     steps:
       - name: setup sbt et al
         run: |
