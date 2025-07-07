@@ -38,6 +38,8 @@ object eJSON {
 						b.toFloat
 		}
 
+	given F[File] = field((o: JSONObject, k: String) => File(o.getString(k)).getAbsoluteFile)
+
 	extension [W](seq: Iterable[W])
 		def toJSONArray(set: (JSONArray, W) => Unit): JSONArray =
 			val json = JSONArray()
@@ -55,13 +57,10 @@ object eJSON {
 						}
 				}
 		def asStrings: Seq[String] = a.toListOf[String].get
-
 		def asObjects: Seq[JSONObject] =
 			(0 until a.length())
 				.to(LazyList)
 				.map(a.getJSONObject)
-
-	given F[File] = field((o: JSONObject, k: String) => File(o.getString(k)).getAbsoluteFile)
 
 	def field[Q](get: (JSONObject, String) => Q): F[Q] =
 		(json: JSONObject, key: String) =>
@@ -73,52 +72,49 @@ object eJSON {
 
 	def field[I: F]: field0[I] = field0[I]()
 
-	trait U[T]:
-		def |[V >: T, E <: T](them: U[E]): U[V] =
-			val base = this
+	trait E[Q] extends F[Q] {
+
+		def ![V](f: Q => V): E[V] =
+			apply(_: JSONObject)
+				.map(f)
+
+		def |[V >: Q, Z <: V](them: E[Z]): E[V] =
 			(json: JSONObject) =>
-				base.unapply(json).orElse(them.unapply(json))
+				apply(json).orElse(them(json))
 
-		def ![O](f: T => O): U[O] =
-			val b = this
-			(json: JSONObject) =>
-				b.unapply(json).map(f)
+		def unapply(src: String): Option[Q] = unapply(JSONObject(JSONTokener(src)))
 
-		def ?[O](f: T => Option[O]): U[O] =
-			val b = this
-			(json: JSONObject) =>
-				b.unapply(json).flatMap(f)
+		def unapply(o: JSONObject): Option[Q] = apply(o).toOption
 
-		def unapply(json: JSONObject): Option[T]
 
-		def unapply(src: String): Option[T] =
-			unapply(JSONObject(JSONTokener(src)))
-
-	trait E[Q] extends F[Q] with U[Q] {
-		override def unapply(o: JSONObject): Option[Q] = decode(o).toOption
-
-		def decode(o: JSONObject): Try[Q]
+		def apply(o: JSONObject): Try[Q]
 
 		override def onObject(json: JSONObject, key: String): Try[Q] =
-			decode(json.getJSONObject(key))
+			apply(json.getJSONObject(key))
 	}
 
 	extension (s: String)
-		def /[Q](f: E[Q]): U[Q] =
+		def /[Q](f: E[Q]): E[Q] =
+
 			(json: JSONObject) =>
 				val keys = json.keySet()
-				if (1 != keys.size())
-					None
-				else {
-					val key = keys.iterator().next()
-					if (key != s)
+				val value =
+					if (1 != keys.size())
 						None
-					else
-						json.optJSONObject(key) match
-							case null =>
-								None
-							case json =>
-								f.unapply(json)
+					else {
+						val key = keys.iterator().next()
+						if (key != s)
+							None
+						else
+							json.optJSONObject(key) match
+								case null =>
+									None
+								case json =>
+									f.unapply(json)
+					}
+
+				Try {
+					value.get
 				}
 
 	trait F[Q] {
@@ -151,7 +147,7 @@ object eJSON {
 						summon[F[I]]
 							.onObject(o, k)
 							.map(get)
-							.flatMap(_.decode(o))
+							.flatMap(_.apply(o))
 
 		inline def map[O](inline func: I => O): E[O] =
 			${ field1.code('{ pure(func) }, '{ func }) }

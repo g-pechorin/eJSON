@@ -3,6 +3,8 @@ package peterlavalle
 import org.json.{JSONArray, JSONObject}
 import peterlavalle.eJSON.*
 
+import scala.util.{Failure, Success, Try}
+
 class eJSONTest extends munit.FunSuite {
 
 	test("do the thing - but - with the optionals") {
@@ -19,7 +21,7 @@ class eJSONTest extends munit.FunSuite {
 			}
 
 		assertEquals(
-			foobar.decode(
+			foobar(
 				new JSONObject()
 					.put("i", "7")
 					.put("s", -9)
@@ -32,7 +34,7 @@ class eJSONTest extends munit.FunSuite {
 		case class OneHo(i: Int)
 		import eJSON.*
 
-		val goo: U[OneHo] =
+		val goo: E[OneHo] =
 			"foo" / {
 				for {
 					g <- field[Int]
@@ -146,7 +148,7 @@ class eJSONTest extends munit.FunSuite {
 		)
 	}
 
-	test("tes toListOf on floats") {
+	test("test toListOf on floats") {
 		val src = "[1, '3.4', -5.0]"
 		val actual: List[Float] = JSONArray(src).toListOf[Float].get
 
@@ -154,5 +156,87 @@ class eJSONTest extends munit.FunSuite {
 			actual,
 			List(1.0f, 3.4f, -5.0f)
 		)
+	}
+
+	test("test simple") {
+
+		class Foo(val a: Int)
+
+		val f: E[Foo] =
+			for {
+				a <- field[Int]
+			} yield {
+				Foo(a)
+			}
+
+		val r: Try[Foo] =
+			f(JSONObject().put("a", 12))
+
+		assertEquals(r.get.a, 12)
+	}
+
+	test("test foo|bar") {
+
+
+		class Foo(val a: Int)
+		class Bar(val c: Float)
+
+		val p: E[Foo | Bar] =
+			val f: E[Foo] =
+				for {
+					a <- field[Int]
+				} yield {
+					Foo(a)
+				}
+			val b: E[Bar] =
+				for {
+					boo <- field[Float]
+				} yield {
+					Bar(boo * -1)
+				}
+
+			f | b
+
+
+		p(JSONObject().put("a", 13)) match
+			case Failure(exception) => throw exception
+			case Success(value: Foo) =>
+				assert(value.a == 13)
+			case what =>
+				fail(what.toString)
+
+		p(JSONObject().put("boo", 1.2f)) match
+			case Failure(exception) => throw exception
+			case Success(value: Bar) =>
+				assert(value.c == -1.2f)
+			case what =>
+				fail(what.toString)
+	}
+
+
+
+	test("test map") {
+		case class Foo(i: Int)
+		case class Bar(s: String)
+
+		val f =
+			for {
+				i <- field[Int]
+			} yield {
+				Foo(i)
+			}
+		val b =
+			f ! {
+				(f) =>
+					Bar(f.toString)
+			}
+
+		assertEquals(
+			b(JSONObject().put("i", 27)),
+			Success(
+				Bar("Foo(27)")
+			)
+		)
+
 	}
 }
