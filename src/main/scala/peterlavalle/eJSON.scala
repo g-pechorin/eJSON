@@ -1,20 +1,21 @@
 package peterlavalle
 
-import org.json.{JSONArray, JSONObject}
+import org.json.{JSONArray, JSONObject, JSONTokener}
 
 import java.io.File
 import scala.math.BigDecimal.javaBigDecimal2bigDecimal
+import scala.util.{Failure, Try}
 
 object eJSON {
-	given Field[String] =
+	given F[String] =
 		field {
 			(o, k) =>
 				o.get(k).toString
 		}
 
-	given Field[Int] =
+	given F[Int] =
 		field {
-			(o, k) =>
+			(o: JSONObject, k: String) =>
 				o.get(k) match
 					case i: Int =>
 						i
@@ -22,7 +23,7 @@ object eJSON {
 						s.toInt
 		}
 
-	given Field[Float] =
+	given F[Float] =
 		field {
 			(o, k) =>
 				o.get(k) match
@@ -44,45 +45,66 @@ object eJSON {
 			json
 
 	extension (a: JSONArray)
-		def asOf[E: Field]: Re[List[E]] =
+		def toListOf[E: F]: Try[List[E]] =
 			(0 until a.length())
-				.foldLeft(Re(List[E]())) {
+				.foldLeft(Try(List[E]())) {
 					case (left, index) =>
 						left.flatMap {
 							left =>
-								summon[Field[E]].onArray(a, index).map(left :+ _)
+								summon[F[E]].onArray(a, index).map(left :+ _)
 						}
 				}
-		def asStrings: Seq[String] = a.asOf[String].get
+		def asStrings: Seq[String] = a.toListOf[String].get
 
 		def asObjects: Seq[JSONObject] =
 			(0 until a.length())
 				.to(LazyList)
 				.map(a.getJSONObject)
 
-	given Field[File] = field((o: JSONObject, k: String) => File(o.getString(k)).getAbsoluteFile)
+	given F[File] = field((o: JSONObject, k: String) => File(o.getString(k)).getAbsoluteFile)
 
-	def field[Q](get: (JSONObject, String) => Q): Field[Q] =
+	def field[Q](get: (JSONObject, String) => Q): F[Q] =
 		(json: JSONObject, key: String) =>
 			try
-				Re(get(json, key))
+				Try(get(json, key))
 			catch
 				case e: Throwable =>
-					Re ! (e)
+					Failure(e)
 
-	def field[I: Field]: field0[I] = field0[I]()
+	def field[I: F]: field0[I] = field0[I]()
 
-	trait oEntity[Q] extends Field[Q] with TUn[Q] {
-		override def unapply(o: JSONObject): Option[Q] = Re.unapply(decode(o))
+	trait U[T]:
+		def |[V >: T, E <: T](them: U[E]): U[V] =
+			val base = this
+			(json: JSONObject) =>
+				base.unapply(json).orElse(them.unapply(json))
 
-		def decode(o: JSONObject): Re[Q]
+		def ![O](f: T => O): U[O] =
+			val b = this
+			(json: JSONObject) =>
+				b.unapply(json).map(f)
 
-		override def onObject(json: JSONObject, key: String): Re[Q] =
+		def ?[O](f: T => Option[O]): U[O] =
+			val b = this
+			(json: JSONObject) =>
+				b.unapply(json).flatMap(f)
+
+		def unapply(json: JSONObject): Option[T]
+
+		def unapply(src: String): Option[T] =
+			unapply(JSONObject(JSONTokener(src)))
+
+	trait E[Q] extends F[Q] with U[Q] {
+		override def unapply(o: JSONObject): Option[Q] = decode(o).toOption
+
+		def decode(o: JSONObject): Try[Q]
+
+		override def onObject(json: JSONObject, key: String): Try[Q] =
 			decode(json.getJSONObject(key))
 	}
 
 	extension (s: String)
-		def /[Q](f: oEntity[Q]): TUn[Q] =
+		def /[Q](f: E[Q]): U[Q] =
 			(json: JSONObject) =>
 				val keys = json.keySet()
 				if (1 != keys.size())
@@ -99,11 +121,13 @@ object eJSON {
 								f.unapply(json)
 				}
 
-	trait Field[Q] {
-		def onArray(json: JSONArray, i: Int): Re[Q] =
+	trait F[Q] {
+		def onArray(json: JSONArray, i: Int): Try[Q] =
 
 			if (i < 0 || json.length() <= i)
-				Re ! IndexOutOfBoundsException(s"index $i is OOB in array $json")
+				Failure(
+					IndexOutOfBoundsException(s"index $i is OOB in array $json")
+				)
 			else
 				val n = getClass.getSimpleName
 				onObject(
@@ -111,34 +135,36 @@ object eJSON {
 					n
 				)
 
-		def onObject(json: JSONObject, key: String): Re[Q]
+		def onObject(json: JSONObject, key: String): Try[Q]
 	}
 
-	final class field0[I: Field]():
-		inline def flatMap[O](inline func: I => oEntity[O]): oEntity[O] =
+	final class field0[I: F]():
+		inline def flatMap[O](inline func: I => E[O]): E[O] =
 			${ field1.code('{ bind(func) }, '{ func }) }
 
-		private def bind[O](get: I => oEntity[O]): String => oEntity[O] =
+		private def bind[O](get: I => E[O]): String => E[O] =
 			(k: String) =>
 				(o: JSONObject) =>
 					if (!o.has(k))
-						Re ! KeyMissing(s"key $k is not in $o")
+						Failure(KeyMissing(s"key $k is not in $o"))
 					else
-						summon[Field[I]]
+						summon[F[I]]
 							.onObject(o, k)
 							.map(get)
 							.flatMap(_.decode(o))
 
-		inline def map[O](inline func: I => O): oEntity[O] =
+		inline def map[O](inline func: I => O): E[O] =
 			${ field1.code('{ pure(func) }, '{ func }) }
 
-		private def pure[O](get: I => O): String => oEntity[O] =
+		private def pure[O](get: I => O): String => E[O] =
 			(k: String) =>
 				(o: JSONObject) =>
 					if (!o.has(k))
-						Re ! IndexOutOfBoundsException(s"key $k is not in $o")
+						Failure(
+							IndexOutOfBoundsException(s"key $k is not in $o")
+						)
 					else
-						summon[Field[I]]
+						summon[F[I]]
 							.onObject(o, k)
 							.map(get)
 
@@ -150,9 +176,9 @@ object eJSON {
 
 		def code[I: Type, O: Type]
 		(
-			q: Expr[String => oEntity[O]],
+			q: Expr[String => E[O]],
 			f: Expr[I => Any]
-		)(using quotes: Quotes): Expr[oEntity[O]] =
+		)(using quotes: Quotes): Expr[E[O]] =
 			import quotes.reflect.*
 
 			// Inspect the lambda to extract parameter name
@@ -168,9 +194,9 @@ object eJSON {
 					'{ ??? }
 			}
 
-	given [T: Field]: Field[List[T]] with {
-		override def onObject(json: JSONObject, key: String): Re[List[T]] =
-			json.getJSONArray(key).asOf[T]
+	given [T: F]: F[List[T]] with {
+		override def onObject(json: JSONObject, key: String): Try[List[T]] =
+			json.getJSONArray(key).toListOf[T]
 	}
 
 }

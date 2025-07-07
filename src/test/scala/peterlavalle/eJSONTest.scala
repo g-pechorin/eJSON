@@ -10,7 +10,7 @@ class eJSONTest extends munit.FunSuite {
 
 		case class FooBar(i: Int, s: String)
 
-		val foobar: oEntity[FooBar] =
+		val foobar: E[FooBar] =
 			for {
 				i <- field[Int]
 				s <- field[String]
@@ -32,7 +32,7 @@ class eJSONTest extends munit.FunSuite {
 		case class OneHo(i: Int)
 		import eJSON.*
 
-		val goo: TUn[OneHo] =
+		val goo: U[OneHo] =
 			"foo" / {
 				for {
 					g <- field[Int]
@@ -145,9 +145,10 @@ class eJSONTest extends munit.FunSuite {
 			Box(-179, 1)
 		)
 	}
-	test("tes asOf on floats") {
+
+	test("tes toListOf on floats") {
 		val src = "[1, '3.4', -5.0]"
-		val actual: List[Float] = JSONArray(src).asOf[Float].get
+		val actual: List[Float] = JSONArray(src).toListOf[Float].get
 
 		assertEquals(
 			actual,
