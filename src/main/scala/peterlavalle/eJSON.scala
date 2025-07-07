@@ -40,6 +40,8 @@ object eJSON {
 
 	given F[File] = field((o: JSONObject, k: String) => File(o.getString(k)).getAbsoluteFile)
 
+	given F[JSONObject] = field(_ getJSONObject _)
+
 	extension [W](seq: Iterable[W])
 		def toJSONArray(set: (JSONArray, W) => Unit): JSONArray =
 			val json = JSONArray()
@@ -71,6 +73,14 @@ object eJSON {
 					Failure(e)
 
 	def field[I: F]: field0[I] = field0[I]()
+
+	def array[I: F]: field0[List[I]] =
+		type Q = List[I]
+
+		field[Q]
+
+	def setOf[I: F]: field0[Set[I]] =
+		sys.error("wrap the array one")
 
 	trait E[Q] extends F[Q] {
 
