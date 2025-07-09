@@ -8,13 +8,13 @@ import scala.util.{Failure, Try}
 
 object eJSON {
 	given F[String] =
-		field {
+		field.pure {
 			(o, k) =>
 				o.get(k).toString
 		}
 
 	given F[Int] =
-		field {
+		field.pure {
 			(o: JSONObject, k: String) =>
 				o.get(k) match
 					case i: Int =>
@@ -24,7 +24,7 @@ object eJSON {
 		}
 
 	given F[Float] =
-		field {
+		field.pure {
 			(o, k) =>
 				o.get(k) match
 					case i: Int =>
@@ -38,9 +38,9 @@ object eJSON {
 						b.toFloat
 		}
 
-	given F[File] = field((o: JSONObject, k: String) => File(o.getString(k)).getAbsoluteFile)
+	given F[File] = field.pure((o: JSONObject, k: String) => File(o.getString(k)).getAbsoluteFile)
 
-	given F[JSONObject] = field(_ getJSONObject _)
+	given F[JSONObject] = field.pure(_ getJSONObject _)
 
 	extension [W](seq: Iterable[W])
 		def toJSONArray(set: (JSONArray, W) => Unit): JSONArray =
@@ -64,15 +64,24 @@ object eJSON {
 				.to(LazyList)
 				.map(a.getJSONObject)
 
-	def field[Q](get: (JSONObject, String) => Q): F[Q] =
-		(json: JSONObject, key: String) =>
-			try
-				Try(get(json, key))
-			catch
-				case e: Throwable =>
-					Failure(e)
-
 	def field[I: F]: field0[I] = field0[I]()
+
+	def flag(s: String): field0[Unit] =
+		given F[Unit] =
+			field.bind {
+				(j: JSONObject, k: String) =>
+					val v = j.getString(k)
+					if (v != s)
+						Failure(
+							Exception(
+								s"its not a match - `$s` != `$v`"
+							)
+						)
+					else
+						Try(())
+			}
+
+		field0[Unit]()
 
 	def array[I: F]: field0[List[I]] =
 		type Q = List[I]
@@ -96,11 +105,27 @@ object eJSON {
 
 		def unapply(o: JSONObject): Option[Q] = apply(o).toOption
 
-
 		def apply(o: JSONObject): Try[Q]
 
 		override def onObject(json: JSONObject, key: String): Try[Q] =
 			apply(json.getJSONObject(key))
+	}
+
+	trait F[Q] {
+		def onArray(json: JSONArray, i: Int): Try[Q] =
+
+			if (i < 0 || json.length() <= i)
+				Failure(
+					IndexOutOfBoundsException(s"index $i is OOB in array $json")
+				)
+			else
+				val n = getClass.getSimpleName
+				onObject(
+					new JSONObject().put(n, json.get(i)),
+					n
+				)
+
+		def onObject(json: JSONObject, key: String): Try[Q]
 	}
 
 	extension (s: String)
@@ -126,23 +151,6 @@ object eJSON {
 				Try {
 					value.get
 				}
-
-	trait F[Q] {
-		def onArray(json: JSONArray, i: Int): Try[Q] =
-
-			if (i < 0 || json.length() <= i)
-				Failure(
-					IndexOutOfBoundsException(s"index $i is OOB in array $json")
-				)
-			else
-				val n = getClass.getSimpleName
-				onObject(
-					new JSONObject().put(n, json.get(i)),
-					n
-				)
-
-		def onObject(json: JSONObject, key: String): Try[Q]
-	}
 
 	final class field0[I: F]():
 		inline def flatMap[O](inline func: I => E[O]): E[O] =
@@ -175,6 +183,34 @@ object eJSON {
 							.map(get)
 
 	private case class KeyMissing(message: String) extends Exception(message)
+
+
+	object field {
+		def read[Q](key: String => Boolean)(value: String => Q): F[Q] =
+			pure {
+				(json: JSONObject, name: String) =>
+					require(
+						json.has(name)
+					)
+					val text = json.getString(name)
+					require(
+						key(text)
+					)
+					value(text)
+			}
+
+		def pure[Q](get: (JSONObject, String) => Q): F[Q] =
+			(json: JSONObject, key: String) =>
+				try
+					Try(get(json, key))
+				catch
+					case e: Throwable =>
+						Failure(e)
+
+		def bind[Q](get: (JSONObject, String) => Try[Q]): F[Q] =
+			(json: JSONObject, key: String) =>
+				get(json, key)
+	}
 
 	private object field1:
 
